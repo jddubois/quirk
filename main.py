@@ -1,5 +1,5 @@
 import quirk
-import controllers
+from quirk import controllers
 from flask import Flask
 from flask import session, request, render_template
 

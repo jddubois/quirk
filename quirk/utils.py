@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
-from ModelBase import ModelBase
+from models import Base
 
 db = None
 dbUser = 'root'
@@ -8,7 +8,6 @@ dbPassword = 'quirkykidz'
 dbHost = 'localhost'
 dbPort = '5432'
 dbName = 'root'
-
 
 def dbConnect():
     dbUrl = 'postgresql://{}:{}@{}:{}/{}'
@@ -22,7 +21,7 @@ def getDb():
     return db
 
 def dbInitialize():
-    import User
-    ModelBase.metadata.create_all(getDb())
+    from models import User
+    Base.metadata.create_all(getDb())
 
 dbSession = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=getDb()))
