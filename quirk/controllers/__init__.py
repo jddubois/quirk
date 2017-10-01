@@ -1,3 +1,4 @@
-from login import login
 from login import fbInitialize
-from test import test
+from login import login_controller
+from user import user_controller
+from test import test_controller

@@ -1,7 +1,12 @@
+from uuid import uuid4
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
-from models import Base
+from sqlalchemy.ext.declarative import declarative_base
 
+# Base Model for Database
+Base = declarative_base()
+
+# Database Information
 db = None
 dbUser = 'root'
 dbPassword = 'quirkykidz'
@@ -14,7 +19,7 @@ def dbConnect():
     dbUrl = dbUrl.format(dbUser, dbPassword, dbHost, dbPort, dbName)
     return create_engine(dbUrl, client_encoding='utf8')
 
-def getDb():
+def dbGet():
     global db
     if db is None:
         db = dbConnect()
@@ -22,6 +27,8 @@ def getDb():
 
 def dbInitialize():
     from models import User
-    Base.metadata.create_all(getDb())
+    Base.metadata.create_all(dbGet())
 
-dbSession = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=getDb()))
+def dbGetSession():
+    dbSession = sessionmaker(autocommit=False, autoflush=False, bind=dbGet())
+    return scoped_session(dbSession)
