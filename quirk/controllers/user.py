@@ -3,32 +3,69 @@ from ..utils import dbGetSession
 from ..models import User
 from flask import Flask, Blueprint
 from flask import current_app as app
-from flask import render_template, jsonify, request, session
+from flask import render_template, jsonify, request, session, make_response
+from sqlalchemy import and_, or_
 
-user_controller = Blueprint('user_controller', __name__, template_folder='templates')
+user_controller = Blueprint('user_controller', __name__)
 
 # Add user quirks to returned data
 @user_controller.route("/user/<userId>", methods=['GET'])
 def getUserRoute(userId):
     dbSession = dbGetSession()
-    if not userHasPermission():
-        return jsonify({
-            'success': False,
+    if not userHasPermission(userId, dbSession, False):
+        dbSession.close()
+        return make_response(jsonify({
             'error': 'Access denied'
-        })
+        }), 403)
     user = dbSession.query(User).filter(User.id == userId).one_or_none()
     dbSession.close()
     if user is None:
-        return jsonify({
-            'success': False,
+        return make_response(jsonify({
             'error': 'User not found'
-        })
-    return jsonify({
-        'success': True,
+        }), 404)
+    return make_response(jsonify({
         'user': user.serialize()
-    })
+    }), 200)
 
+@user_controller.route("/user/<userId>", methods=['PUT'])
+def updateUserRoute(userId):
+    dbSession = dbGetSession()
+    if not userHasPermission(userId, dbSession, False):
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    user = dbSession.query(User).filter(User.id == userId).one_or_none()
+    if user is None:
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'User not found'
+        }), 404)
+    # Iterate over request data and update user accordingly
+    if request.get_json() is not None:
+        user.set(request.get_json())
+        dbSession.commit()
+    dbSession.close()
+
+    dbSession = dbGetSession()
+    user = dbSession.query(User).filter(User.id == userId).one_or_none()
+    dbSession.close()
+
+    return make_response(jsonify({
+        'user': user.serialize()
+    }), 200)
 # Fix this to ensure correct permissions
-def userHasPermission(userId, dbSession):
+def userHasPermission(userId, dbSession, isUpdate):
     if not 'user_id' in session:
         return False
+    if isUpdate and session['user_id'] == userId:
+        return True
+    if not isUpdate and session['user_id'] == userId:
+        return True
+    if not isUpdate:
+        dbQueryOne = and_(Match.user_one_id == userId, Match.user_two_id == session['user_id'])
+        dbQueryTwo = and_(Match.user_one_id == session['user_id'], Match.user_two_id == userId)
+        match = dbSession.query(Match).filter(or_(dbQueryOne, dbQueryTwo)).one_or_none()
+        if match is not None:
+            return True
+    return False

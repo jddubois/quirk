@@ -3,7 +3,7 @@ from ..utils import dbGetSession
 from ..models import User
 from flask import Flask, Blueprint
 from flask import current_app as app
-from flask import render_template, jsonify, request, session
+from flask import render_template, jsonify, request, session, make_response
 
 login_controller = Blueprint('login_controller', __name__, template_folder='templates')
 
@@ -46,10 +46,9 @@ def fbGetUser(accessToken):
 def fbHandleResponse(fbResponse, accessToken):
     fbUser = fbVerifyUser(fbResponse)
     if not fbUser:
-        return jsonify({
-            'success': False,
+        return make_response(jsonify({
             'error': 'User verification failed'
-        })
+        }), 400)
     dbSession = dbGetSession()
     user = dbSession.query(User).filter(User.id == fbUser).one_or_none()
     newUser = user is None
@@ -57,11 +56,10 @@ def fbHandleResponse(fbResponse, accessToken):
         user = createUser(accessToken, dbSession)
     session['user_id'] = user.id
     dbSession.close()
-    return jsonify({
-        'success': True,
+    return make_response(jsonify({
         'is_new_user': newUser,
         'user': user.serialize()
-    })
+    }), 200)
 
 def fbInitialize():
     fbUrl = 'https://graph.facebook.com/oauth/access_token'
@@ -88,7 +86,6 @@ def loginRoute():
         }
         fbResponse = requests.get(fbUrl, fbParams)
         return fbHandleResponse(fbResponse, requestData['access_token'])
-    return jsonify({
-        'success': False,
+    return make_response(jsonify({
         'error': 'Access token not found'
-    })
+    }), 400)

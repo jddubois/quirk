@@ -14,10 +14,12 @@ dbHost = 'localhost'
 dbPort = '5432'
 dbName = 'root'
 
-def dbConnect():
+def dbGetURI():
     dbUrl = 'postgresql://{}:{}@{}:{}/{}'
-    dbUrl = dbUrl.format(dbUser, dbPassword, dbHost, dbPort, dbName)
-    return create_engine(dbUrl, client_encoding='utf8')
+    return dbUrl.format(dbUser, dbPassword, dbHost, dbPort, dbName)
+
+def dbConnect():
+    return create_engine(dbGetURI(), client_encoding='utf8')
 
 def dbGet():
     global db
@@ -26,7 +28,7 @@ def dbGet():
     return db
 
 def dbInitialize():
-    from models import User
+    from models import *
     Base.metadata.create_all(dbGet())
 
 def dbGetSession():

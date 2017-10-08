@@ -30,7 +30,7 @@
           method: 'POST',
           contentType: 'application/json',
           data: JSON.stringify({
-            'accessToken': response.authResponse.accessToken
+            'access_token': response.authResponse.accessToken
           }),
           success: function (data) {
             console.log("Sent Token")
@@ -38,6 +38,7 @@
           },
           error: function (errors) {
             console.log("Send Failed")
+            console.log(errors)
           }
         });
       }
