@@ -77,6 +77,25 @@ def reportUserRoute(userId):
         'error': 'No report body found'
     }), 400)
 
+@user_controller.route("/user/<userId>", methods=['DELETE'])
+def deleteUserRoute(userId):
+    dbSession = dbGetSession()
+    if not userHasPermission(userId, dbSession, True):
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    user = dbSession.query(User).filter(User.id == userId).one_or_none()
+    if user is None:
+        return make_response(jsonify({
+            'error': 'User not found'
+        }), 404)
+    dbSession.delete(user)
+    dbSession.commit()
+    dbSession.close()
+    session.pop('user_id')
+    return make_response("", 200)
+
 # Fix this to ensure correct permissions
 def userHasPermission(userId, dbSession, isUpdate):
     if not 'user_id' in session:

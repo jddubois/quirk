@@ -1,6 +1,6 @@
 import requests
 from ..utils import dbGetSession
-from ..models import User
+from ..models import User, Quirk
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
@@ -15,6 +15,8 @@ def createUser(accessToken, dbSession):
     age = userData['age_range']['min']
     user = User(id=id, name=name, age=age)
     dbSession.add(user)
+    for i in range(app.config['NUM_QUIRKS']):
+        dbSession.add(Quirk(user_id=id))
     dbSession.commit()
     return user
 

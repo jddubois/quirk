@@ -48,7 +48,7 @@ class User(Base):
             'name': self.name,
             'age': self.age,
             'bio': self.bio,
-            'quirks': userQuirks
+            'quirks': [quirk.serialize() for quirk in userQuirks]
         }
 
 class Quirk(Base):
