@@ -32,5 +32,5 @@ def dbInitialize():
     Base.metadata.create_all(dbGet())
 
 def dbGetSession():
-    dbSession = sessionmaker(autocommit=False, autoflush=False, bind=dbGet())
+    dbSession = sessionmaker(expire_on_commit=False, autocommit=False, autoflush=False, bind=dbGet())
     return scoped_session(dbSession)

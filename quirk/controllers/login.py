@@ -10,10 +10,10 @@ login_controller = Blueprint('login_controller', __name__, template_folder='temp
 # Creates a new user from facebook access token
 def createUser(accessToken, dbSession):
     userData = fbGetUser(accessToken)
-    userId = userData['id']
-    userName = userData['first_name']
-    userAge = userData['age_range']['min']
-    user = User(id=userId, name=userName, age=userAge)
+    id = userData['id']
+    name = userData['first_name']
+    age = userData['age_range']['min']
+    user = User(id=id, name=name, age=age)
     dbSession.add(user)
     dbSession.commit()
     return user
@@ -89,3 +89,12 @@ def loginRoute():
     return make_response(jsonify({
         'error': 'Access token not found'
     }), 400)
+
+@login_controller.route("/logout", methods=['POST'])
+def logoutRoute():
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    id = session.pop('user_id')
+    return make_response("", 200)

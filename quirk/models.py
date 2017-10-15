@@ -2,6 +2,7 @@ from utils import Base
 from utils import dbGetSession
 from sqlalchemy import String, Boolean, SmallInteger, Text, Float, Integer
 from sqlalchemy import Column, ForeignKey
+from uuid import uuid4
 
 def uuidGet():
     return str(uuid4())
@@ -17,11 +18,19 @@ class User(Base):
     longitude = Column(Float())
     min_age = Column(SmallInteger())
     max_age = Column(SmallInteger())
-
+    gender = Column(SmallInteger())
+    seeking = Column(SmallInteger())
+    reports = Column(SmallInteger(), default=0)
     # TODO
         # Notification settings
-        # Gender
+        # Come up with plan for storing nonbinary genders
         # Miles vs kilometers?
+    # NOTE
+        # Gender = 0 means male
+        # Gender = 1 means female
+        # Seeking = 0 means seeking male
+        # Seeking = 1 means seeking female
+        # Seeking = 2 means seeking male and female
 
     def set(self, newUser):
         fields = self.__dict__.keys()
@@ -98,7 +107,7 @@ class Priority(Base):
 
 class Deal(Base):
     __tablename__ = 'deals'
-    id = Column(Integer, primary_key=True)
+    id = Column(String(36), primary_key=True, default=uuidGet)
     latitude = Column(Float())
     longitude = Column(Float())
     business_name = Column(String(255))
@@ -120,3 +129,15 @@ class UserDeal(Base):
     __tablename__ = 'user_redeemed_deals'
     user_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
     deal_id = Column(Integer, ForeignKey('deals.id'), primary_key=True)
+
+class Report(Base):
+    __tablename__ = 'reports'
+    reporter_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    reportee_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    body = Column(Text())
+    def serialize(self):
+        return {
+            'reporter_id': self.reporter_id,
+            'reportee_id': self.reportee_id,
+            'body': self.body
+        }

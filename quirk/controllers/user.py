@@ -1,6 +1,6 @@
 import requests
 from ..utils import dbGetSession
-from ..models import User
+from ..models import User, Report
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
@@ -54,13 +54,34 @@ def updateUserRoute(userId):
     return make_response(jsonify({
         'user': user.serialize()
     }), 200)
+
+@user_controller.route("/report/<userId>", methods=['POST'])
+def reportUserRoute(userId):
+    dbSession = dbGetSession()
+    if not userHasPermission(userId, dbSession, False):
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    reportData = request.get_json()
+    if  reportData is not None and reportData['body'] is not None:
+        report = Report(reporter_id=session['user_id'], reportee_id=userId, body=reportData['body'])
+        dbSession.add(report)
+        dbSession.commit()
+        dbSession.close()
+        return make_response(jsonify({
+            'report': report.serialize()
+        }), 200)
+    dbSession.close()
+    return make_response(jsonify({
+        'error': 'No report body found'
+    }), 400)
+
 # Fix this to ensure correct permissions
 def userHasPermission(userId, dbSession, isUpdate):
     if not 'user_id' in session:
         return False
-    if isUpdate and session['user_id'] == userId:
-        return True
-    if not isUpdate and session['user_id'] == userId:
+    if session['user_id'] == userId:
         return True
     if not isUpdate:
         dbQueryOne = and_(Match.user_one_id == userId, Match.user_two_id == session['user_id'])
