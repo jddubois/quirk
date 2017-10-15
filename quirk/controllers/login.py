@@ -15,6 +15,7 @@ def createUser(accessToken, dbSession):
     age = userData['age_range']['min']
     user = User(id=id, name=name, age=age)
     dbSession.add(user)
+    dbSession.commit()
     for i in range(app.config['NUM_QUIRKS']):
         dbSession.add(Quirk(user_id=id))
     dbSession.commit()

@@ -55,7 +55,7 @@ class Quirk(Base):
     __tablename__ = 'quirks'
     id = Column(String(36), primary_key=True, default=uuidGet)
     quirk = Column(String(140))
-    user_id = Column(String(255), ForeignKey('users.id'))
+    user_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
     def serialize(self):
         return {
             'id': self.id,
@@ -65,8 +65,8 @@ class Quirk(Base):
 
 class UserLike(Base):
     __tablename__ = 'user_likes'
-    liker_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    likee_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    liker_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    likee_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     liked = Column(Boolean())
     def serialize(self):
         return {
@@ -77,9 +77,9 @@ class UserLike(Base):
 
 class QuirkLike(Base):
     __tablename__ = 'quirk_likes'
-    likee_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    liker_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    quirk_id = Column(String(36), ForeignKey('quirks.id'), primary_key=True)
+    likee_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    liker_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    quirk_id = Column(String(36), ForeignKey('quirks.id', ondelete="CASCADE"), primary_key=True)
     liked = Column(Boolean())
     def serialize(self):
         return {
@@ -92,17 +92,17 @@ class QuirkLike(Base):
 class Photo(Base):
     __tablename__ = 'photos'
     id = Column(String(36), primary_key=True, default=uuidGet)
-    user_id = Column(String(255), ForeignKey('users.id'))
+    user_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
 
 class Match(Base):
     __tablename__ = 'matches'
-    user_one_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    user_two_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
 
 class Priority(Base):
     __tablename__ = 'priorities'
-    user_one_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    user_two_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     priority = Column(SmallInteger(), default=0)
 
 class Deal(Base):
@@ -132,8 +132,8 @@ class UserDeal(Base):
 
 class Report(Base):
     __tablename__ = 'reports'
-    reporter_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    reportee_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    reporter_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    reportee_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     body = Column(Text())
     def serialize(self):
         return {
