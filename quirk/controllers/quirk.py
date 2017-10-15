@@ -1,10 +1,11 @@
 import requests
 from ..utils import dbGetSession
-from ..models import Quirk, User, UserLike, Match, QuirkLike
+from ..models import Quirk, User, UserLike, Match, QuirkLike, Priority
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
 from sqlalchemy import and_, or_
+from math import sin, cos, sqrt, radians
 
 quirk_controller = Blueprint('quirk_controller', __name__)
 
@@ -12,6 +13,57 @@ quirk_controller = Blueprint('quirk_controller', __name__)
 # 1. Check if all parameters are passed
 # 2. Check if used has permission to update that quirk
 # 3. Update the quirk
+@quirk_controller.route("/quirk", methods=['GET'])
+def getQuirks():
+
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error' : 'user not logged in'
+        }), 403)
+
+    # TODO Return error if no location found
+
+    latitude = radians(request.args.get("latitude"))
+    longitude = radians(request.args.get("longitude"))
+    radius = 3959 # miles
+
+
+    # SELECT * FROM Places WHERE ;
+    dbSession = dbGetSession()
+    user = dbSession.query(User).filter(User.user_id == session['user_id']).one_or_none()
+
+    # check if user is none
+    if user is None:
+        return make_response(jsonify({
+            'error' : 'user does not exist'
+        }), 404)
+
+    userQuery = or_(Priority.user_one_id == session['user_id'], Priority.user_two_id == session['user_id'])
+
+    # Get Quirks by querying Quirk, QuirkLike, User, and Priority for best options
+    priorityQuirks = dbSession.query(Priority, User, QuirkLike, Quirk).\
+    filter(and_(userQuery, acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).\
+    order_by(Priority.priority).limit(100)
+
+    print priorityQuirks
+
+    if len(priorityQuirks) < 100:
+        # Need to query more
+        regularQuirks = dbSession.query(User, QuirkLike, Quirk).filter(and_(acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).limit(100 - priorityQuirks.count())
+
+        print regularQuirks
+        # shuffle them up
+        return make_response(({
+        'priorities' : jsonify(priorityQuirks),
+        'regular' : jsonify(regularQuirks)
+        }), 200)
+
+    # If out here we can just return 100 priority quirks
+    return make_response(jsonify({
+    'priorities' : jsonify(priorityQuirks),
+    'other': ''
+    }), 200)
+
 @quirk_controller.route("/quirk_update", methods=['PUT'])
 def updateQuirkRoute():
     id = request.args.get("id")
@@ -44,8 +96,40 @@ def updateQuirkRoute():
     return make_response(jsonify({
             'id': id,
             'user_id': user_id,
-            'quirk': quirk 
+            'quirk': quirk
         }), 200)
+
+
+def fetchPriority(liker, likee, dbSession):
+    if liker.id < likee.id:
+        priority = dbSession.query(Priority).filter(Priority.user_one_id == liker.id, Priority.user_two_id == likee.id).one_or_none()
+    else:
+        priority = dbSession.query(Priority).filter(Priority.user_one_id == likee.id, Priority.user_two_id == liker.id).one_or_none()
+
+    return priority
+
+def userExists(userId, dbSession):
+    curr_user = dbSession.query(User).filter(User.id == userId).one_or_none()
+    if curr_user is None:
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'User not found'
+        }), 404)
+
+    return curr_user
+
+def createMatch(liker, likee, dbSession):
+    # Create a match bc liker and likee like each other
+    if(liker.id < likee.id):
+        print "liker < likee"
+        newMatch = Match(user_one_id = liker.id, user_two_id = likee.id)
+
+    elif(likee.id < liker.id):
+        print "likee < liker"
+        newMatch = Match(user_one_id = likee.id, user_two_id = liker.id)
+
+    dbSession.add(newMatch)
+    dbSession.commit()
 
 ### Endpoint for telling whether there is a like or not
 ### Returns whether or not you matched with person
@@ -55,31 +139,22 @@ def addLikeRoute():
     likerId = request.args.get("liker_id")
     likeeId = request.args.get("likee_id")
     quirkId = request.args.get("quirk_id")
+    liked = request.args.get("liked") == "true"
 
     # Checks if liker, likee, quirk exists
     dbSession = dbGetSession()
 
-    # TODO: check if liker  is logged in via facebook
-    liker = dbSession.query(User).filter(User.id == likerId).one_or_none()
-    if liker is None:
-        dbSession.close()
-        return make_response(jsonify({
-            'error': 'User not found'
-        }), 404)
-    likee = dbSession.query(User).filter(User.id == likeeId).one_or_none()
-    if likee is None:
-        dbSession.close()
-        return make_response(jsonify({
-            'error': 'User not found'
-            }), 404)
+    # TODO: check if liker is logged in via facebook
+    liker = userExists(likerId, dbSession)
+    likee = userExists(likeeId, dbSession)
+
+    # Check if quirk exists
     quirk = dbSession.query(Quirk).filter(Quirk.id == quirkId).one_or_none()
     if quirk is None:
         dbSession.close()
         return make_response(jsonify({
             'error': 'Quirk not found'
             }), 404)
-
-    print "Checked permissions done"
 
     # Quirk checks: make sure likee doesn't like their own quirk
     if liker == likee:
@@ -88,19 +163,12 @@ def addLikeRoute():
             'error': 'Liker and likee cannot be the same user'
         }), 403)
 
-    print "Quirk check #1 done"
-
     # Quirk checks: make sure likee owns that quirk
-    print quirk.user_id
-    print likee.id
     if quirk.user_id != likee.id:
         dbSession.close()
         return make_response(jsonify({
             'error': 'Likee does not own quirk'
             }), 403)
-
-    print "Quirk check #2 done"
-
 
     # This is how the rest of this code pans out:
     # 1. First we add any liked quirks to the QuirkLike table
@@ -113,61 +181,94 @@ def addLikeRoute():
     #    So, we add the UserLike(liker, likee) to the UserLike table.
     # 5. If the likee likes the liker, both the liker and the likee like each other.
     #    Delete the UserLike entry, we don't need this anymore.
-    # 6. Create a match. 
+    # 6. Create a match.
 
-    # Add liked quirk to the QuirkLikes table
-    likedQuirk = QuirkLike(likee_id= likee.id, quirk_id= quirk.id, liker_id= liker.id, liked= True)
-    dbSession.add(likedQuirk)
-    dbSession.commit()
+    # Determine if there is already a priority between them and fetch it
+    priority = fetchPriority(liker, likee, dbSession)
 
-    print "Added liked quirk to QuirkLike table"
+    # The liker liked the likee
+    if liked:
+
+        # Add liked quirk to the QuirkLikes table
+        likedQuirk = QuirkLike(likee_id= likee.id, quirk_id= quirk.id, liker_id= liker.id, liked= True)
+        dbSession.add(likedQuirk)
+
+        # Create a priority
+        if priority is None:
+
+            if liker.id < likee.id:
+                priority = Priority(user_one_id = liker.id, user_two_id= likee.id, priority= 1)
+            else:
+                priority = Priority(user_one_id = likee.id, user_two_id= liker.id, priority= 1)
+
+            dbSession.add(priority)
+        
+        # Update (++) the existing priority 
+        else:
+
+            priority.priority = priority.priority + 1
+
+        dbSession.commit()
+
+    # The liker disliked the likee
+    else:
+
+        # Add disliked quirk to the QuirkLikes table
+        likedQuirk = QuirkLike(likee_id= likee.id, quirk_id= quirk.id, liker_id= liker.id, liked= False)
+        dbSession.add(likedQuirk)
+
+        if priority is not None:
+
+            # Delete a priority if under 1
+            if priority.priority == 1:
+
+                if liker.id < likee.id:
+                    dbSession.query(Priority).filter(Priority.user_one_id == liker.id, Priority.user_two_id == likee.id).delete()
+                else:
+                    dbSession.query(Priority).filter(Priority.user_one_id == likee.id, Priority.user_two_id == liker.id).delete()
+
+            # Update (--) the exisiting priority
+            elif priority.priority > 1:
+
+                priority.priority = priority.priority - 1;
+
+        dbSession.commit()
+        dbSession.close()
+        return make_response(jsonify({
+            'match': 'false'
+            }), 200)
 
     # See if liker likes likee
     alllikerQuirks = dbSession.query(QuirkLike).filter(and_(QuirkLike.liker_id == liker.id, QuirkLike.likee_id == likee.id)).all()
 
+    # Liker does not like likee yet
     if len(alllikerQuirks) < 3:
+
         dbSession.close()
-        print "liker doesn't have 3 likes for likee"
         return make_response(jsonify({
             'match': 'false'
             }), 200)
 
-    print "Liker likes likee"
-
-    # See if likee likes liker before we add to UserLike table (don't want to have to add and delete later)
+    # See if likee likes liker
     newUserLike = dbSession.query(UserLike).filter(and_(UserLike.liker_id == likee.id and UserLike.likee_id == liker.id)).one_or_none()
-    print newUserLike
+    
+    # Likee does not like liker, liking is one way
     if newUserLike is None:
+
+        # Add that liker like likee only
         dbSession.add(UserLike(liker_id= liker.id, likee_id= likee.id, liked= True))
         dbSession.commit()
         dbSession.close()
-        print "likee doesn't like liker"
-        # Liker likes likee, so add this entry to the UserLike table
+
         return make_response(jsonify({
             'match': 'false'
             }), 200)
 
-    print "Likee likes liker"
-
-    # Users like each other, delete this entry from table and add to match
+    # Both like each other, delete this entry UserLike
     dbSession.query(UserLike).filter(and_(UserLike.likee_id == likee.id and UserLike.liker_id == liker.id)).delete()
 
-    print "Deleted entry from UserLike table"
-
     # Create a match bc liker and likee like each other
-    if(liker.id < likee.id):
-        print "liker < likee"
-        newMatch = Match(user_one_id = liker.id, user_two_id = likee.id)
-        dbSession.add(newMatch)
-        dbSession.commit()
-
-    elif(likee.id < liker.id):
-        print "likee < liker"
-        newMatch = Match(user_one_id = likee.id, user_two_id = liker.id)
-        dbSession.add(newMatch)
-        dbSession.commit()
-
-    print "Created match"
+    createMatch(liker, likee, dbSession)
 
     return make_response(jsonify({
         'match': 'true'

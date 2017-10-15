@@ -1,6 +1,6 @@
 from utils import Base
 from utils import dbGetSession
-from sqlalchemy import String, Boolean, SmallInteger, Text, Float
+from sqlalchemy import String, Boolean, SmallInteger, Text, Float, Integer
 from sqlalchemy import Column, ForeignKey
 
 def uuidGet():
@@ -90,3 +90,33 @@ class Match(Base):
     user_one_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
     user_two_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
 
+class Priority(Base):
+    __tablename__ = 'priorities'
+    user_one_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    user_two_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    priority = Column(SmallInteger(), default=0)
+
+class Deal(Base):
+    __tablename__ = 'deals'
+    id = Column(Integer, primary_key=True)
+    latitude = Column(Float())
+    longitude = Column(Float())
+    business_name = Column(String(255))
+    deal_name = Column(String(255))
+    deal_text = Column(String(255))
+    photo_id = Column(String(36), default="images/no_picture.jpg")
+    def serialize(self):
+        return {
+            'id': self.id,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'business_name': self.business_name,
+            'deal_name': self.deal_name,
+            'deal_text': self.deal_text,
+            'photo_id': self.photo_id
+        }
+
+class UserDeal(Base):
+    __tablename__ = 'user_redeemed_deals'
+    user_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
+    deal_id = Column(Integer, ForeignKey('deals.id'), primary_key=True)
