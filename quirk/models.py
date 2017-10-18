@@ -3,6 +3,7 @@ from utils import dbGetSession
 from sqlalchemy import String, Boolean, SmallInteger, Text, Float, Integer
 from sqlalchemy import Column, ForeignKey
 from uuid import uuid4
+from flask import current_app as app
 
 def uuidGet():
     return str(uuid4())
@@ -92,12 +93,23 @@ class QuirkLike(Base):
 class Photo(Base):
     __tablename__ = 'photos'
     id = Column(String(36), primary_key=True, default=uuidGet)
+    ext = Column(String(3))
     user_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
+    thumbnail = Column(Boolean())
 
 class Match(Base):
     __tablename__ = 'matches'
     user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    def serialize(self, user, dbSession):
+        otherId = self.user_two_id if self.user_one_id == user else self.user_one_id
+        print(otherId)
+        otherUser = dbSession.query(User).filter(User.id == otherId).one_or_none()
+        photo = dbSession.query(Photo).filter(Photo.user_id == otherId, Photo.thumbnail == True).one_or_none()
+        return {
+            'name': otherUser.name,
+            'photo': '{}/{}.{}'.format(app.config['UPLOAD_FOLDER'], photo.id, photo.ext)
+        }
 
 class Priority(Base):
     __tablename__ = 'priorities'
@@ -128,7 +140,7 @@ class Deal(Base):
 class UserDeal(Base):
     __tablename__ = 'user_redeemed_deals'
     user_id = Column(String(255), ForeignKey('users.id'), primary_key=True)
-    deal_id = Column(Integer, ForeignKey('deals.id'), primary_key=True)
+    deal_id = Column(String(36), ForeignKey('deals.id'), primary_key=True)
 
 class Report(Base):
     __tablename__ = 'reports'

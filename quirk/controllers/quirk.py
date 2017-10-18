@@ -22,13 +22,13 @@ def getQuirks():
         }), 403)
 
     # TODO Return error if no location found
-
+    # TODO store new location in database
     latitude = radians(request.args.get("latitude"))
     longitude = radians(request.args.get("longitude"))
     radius = 3959 # miles
+    maxQuirks = 100
 
 
-    # SELECT * FROM Places WHERE ;
     dbSession = dbGetSession()
     user = dbSession.query(User).filter(User.user_id == session['user_id']).one_or_none()
 
@@ -38,20 +38,32 @@ def getQuirks():
             'error' : 'user does not exist'
         }), 404)
 
-    userQuery = or_(Priority.user_one_id == session['user_id'], Priority.user_two_id == session['user_id'])
-
     # Get Quirks by querying Quirk, QuirkLike, User, and Priority for best options
-    priorityQuirks = dbSession.query(Priority, User, QuirkLike, Quirk).\
-    filter(and_(userQuery, acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).\
-    order_by(Priority.priority).limit(100)
+    priorityQuirks = dbSession.query(Priority, User, QuirkLike, Quirk).filter(
+    # Filter by user priority
+        or_(
+            Priority.user_one_id == session['user_id'],
+            Priority.user_two_id == session['user_id']
+        )
+    # Filter out users not in range
+    ).filter(
+            acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius
+    # Filter out unliked quirks
+    ).filter(
+        QuirkLike.liker_id != session['user_id']
+    ).order_by(Priority.priority).limit(maxQuirks)
+    # TODO: Filter by gender and seeking settings
+    #filter().\
+    # TODO: Filter by age and age range
+    #filter().\
 
     print priorityQuirks
 
-    if len(priorityQuirks) < 100:
+    if len(priorityQuirks) < maxQuirks:
         # Need to query more
+        # TODO ensure NONE of these quirks are priority so that there is no overlap between previous set
         regularQuirks = dbSession.query(User, QuirkLike, Quirk).filter(and_(acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).limit(100 - priorityQuirks.count())
-
-        print regularQuirks
+        # print regularQuirks
         # shuffle them up
         return make_response(({
         'priorities' : jsonify(priorityQuirks),
@@ -202,8 +214,8 @@ def addLikeRoute():
                 priority = Priority(user_one_id = likee.id, user_two_id= liker.id, priority= 1)
 
             dbSession.add(priority)
-        
-        # Update (++) the existing priority 
+
+        # Update (++) the existing priority
         else:
 
             priority.priority = priority.priority + 1
@@ -251,7 +263,7 @@ def addLikeRoute():
 
     # See if likee likes liker
     newUserLike = dbSession.query(UserLike).filter(and_(UserLike.liker_id == likee.id and UserLike.likee_id == liker.id)).one_or_none()
-    
+
     # Likee does not like liker, liking is one way
     if newUserLike is None:
 
