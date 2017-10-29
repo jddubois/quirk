@@ -2,8 +2,10 @@ from utils import Base
 from utils import dbGetSession
 from sqlalchemy import String, Boolean, SmallInteger, Text, Float, Integer
 from sqlalchemy import Column, ForeignKey
+from sqlalchemy.ext.hybrid import hybrid_method
 from uuid import uuid4
 from flask import current_app as app
+from math import sin, acos, cos, radians
 
 def uuidGet():
     return str(uuid4())
@@ -32,6 +34,20 @@ class User(Base):
         # Seeking = 0 means seeking male
         # Seeking = 1 means seeking female
         # Seeking = 2 means seeking male and female
+
+    def isGenderCompatible(self, other):
+        # Other is interested
+        if self.gender == other.seeking or other.seeking == 2:
+            # User is interested
+            if self.seeking == other.gender or self.seeking == 2:
+                return True
+        return False
+
+    def getDistance(self, other):
+        radius = 3959
+        return acos(
+            sin(radians(other.latitude)) * sin(radians(self.latitude)) + cos(radians(other.latitude)) * cos(radians(self.latitude)) * cos(radians(self.longitude - other.longitude))
+        ) * radius
 
     def set(self, newUser):
         fields = self.__dict__.keys()
