@@ -123,7 +123,7 @@ def getQuirks():
     filteredUsers = []
     for u in priorityUsers:
         if not shouldRemoveUser(u, user, dbSession):
-            ++totalUsers
+            totalUsers += 1
             filteredUsers.append(u)
             if totalUsers == maxUsers:
                 break
@@ -145,7 +145,7 @@ def getQuirks():
 
         for u in otherUsers:
             if u not in filteredUsers and not shouldRemoveUser(u, user, dbSession):
-                ++totalUsers
+                totalUsers += 1
                 filteredUsers.append(u)
                 if totalUsers == maxUsers:
                     break
