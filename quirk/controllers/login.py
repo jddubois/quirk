@@ -81,7 +81,7 @@ def fbInitialize():
 @login_controller.route("/login", methods=['POST'])
 def loginRoute():
     requestData = request.get_json()
-    if requestData['access_token'] is not None:
+    if requestData is not None and requestData['access_token'] is not None:
         fbUrl = 'https://graph.facebook.com/debug_token'
         fbParams = {
             'input_token': requestData['access_token'],
