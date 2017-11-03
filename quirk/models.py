@@ -59,12 +59,22 @@ class User(Base):
     def serialize(self):
         dbSession = dbGetSession()
         userQuirks = dbSession.query(Quirk).filter(Quirk.user_id == self.id).all()
+        userPhotos = dbSession.query(Photo).filter(Photo.user_id == self.id, Photo.thumbnail == False).all()
+        userThumbnail = dbSession.query(Photo).filter(Photo.user_id == self.id, Photo.thumbnail == True).one_or_none()
+
+        thumbnailUrl = None
+        if not userThumbnail is None:
+            thumbnailUrl = userThumbnail.getUrl()
+
         dbSession.close()
+
         return {
             'id': self.id,
             'name': self.name,
             'age': self.age,
             'bio': self.bio,
+            'thumbnail': thumbnailUrl,
+            'photos': [photo.getUrl() for photo in userPhotos],
             'quirks': [quirk.serialize() for quirk in userQuirks]
         }
 
@@ -113,6 +123,9 @@ class Photo(Base):
     user_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
     thumbnail = Column(Boolean())
 
+    def getUrl(self):
+        return '{}/{}.{}'.format(app.config['PHOTO_BASE_URL'], self.id, self.ext)
+
 class Match(Base):
     __tablename__ = 'matches'
     user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
@@ -124,7 +137,7 @@ class Match(Base):
         photo = dbSession.query(Photo).filter(Photo.user_id == otherId, Photo.thumbnail == True).one_or_none()
         return {
             'name': otherUser.name,
-            'photo': '{}/{}.{}'.format(app.config['UPLOAD_FOLDER'], photo.id, photo.ext)
+            'photo': photo.getUrl()
         }
 
 class Priority(Base):

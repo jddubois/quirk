@@ -1,12 +1,97 @@
 import requests
+import os
 from ..utils import dbGetSession
-from ..models import User, Report
+from ..models import User, Report, Photo, uuidGet
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
 from sqlalchemy import and_, or_
-
+from werkzeug.utils import secure_filename
 user_controller = Blueprint('user_controller', __name__)
+
+@user_controller.route("/photo", methods=['POST'])
+def uploadPhotoRoute():
+    # Check user permissions
+    if not 'user_id' in session:
+        dbSession.close()
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    # Check if file exists
+    print('test')
+    print(request.files)
+    if 'file' not in request.files:
+        print('not found')
+        return make_response(jsonify({
+            'error': 'File not found'
+        }), 400)
+    file = request.files['file']
+    # TODO: Check for file extension / get extension
+    extension = request.args.get('extension')
+    print(extension)
+    if extension is None or extension.lower() not in app.config['PHOTO_EXT']:
+        return make_response(jsonify({
+            'error': 'File extension not included'
+        }), 400)
+    # Get thumbnail status
+    isThumbnail = request.args.get('thumbnail')
+    if isThumbnail is None:
+        isThumbnail = False
+    # Create photo entry
+    photo = Photo(id=uuidGet(), ext=extension, user_id=session['user_id'], thumbnail=isThumbnail)
+    # Generate filename
+    filename = photo.id + '.' + photo.ext
+    # Write to disk
+    if file:
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        # Add photo to database
+        dbSession = dbGetSession()
+        dbSession.add(photo)
+        dbSession.commit()
+        dbSession.close()
+        # Return URL
+        return make_response(jsonify({
+            'url': photo.getUrl()
+        }), 400)
+    # Return error
+    return make_response(jsonify({
+        'error': 'File not found'
+    }), 400)
+
+#TODO: Complete this
+@user_controller.route("/photo", methods=['DELETE'])
+def deletePhotoRoute():
+    url = request.args.get('url')
+    if url is None:
+        return make_response(jsonify({
+            'error': 'File not found'
+        }), 400)
+    # Get filename from query parameters
+    filename = os.path.basename(url)
+    filename = secure_filename(filename)
+    # Get photo id
+    photoId = filename.split('.')[0]
+    dbSession = dbGetSession()
+    print(filename)
+    print(photoId)
+    photo = dbSession.query(Photo).filter(Photo.id == photoId).one_or_none()
+    if photo is None:
+        return make_response(jsonify({
+            'error': 'Photo not found'
+        }), 404)
+    # Check user permissions
+    if not userHasPermission(photo.user_id, dbSession, True):
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    # Make database changes
+    dbSession.delete(photo)
+    dbSession.commit()
+    dbSession.close()
+    # Remove from disk
+    deleteUrl = app.config['UPLOAD_FOLDER'] + '/' + filename
+    os.remove(deleteUrl)
+    return make_response('', 200)
 
 # Add user quirks to returned data
 @user_controller.route("/user/<userId>", methods=['GET'])
@@ -26,6 +111,8 @@ def getUserRoute(userId):
     return make_response(jsonify({
         'user': user.serialize()
     }), 200)
+
+
 
 @user_controller.route("/user/<userId>", methods=['PUT'])
 def updateUserRoute(userId):

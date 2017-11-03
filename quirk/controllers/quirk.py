@@ -171,40 +171,26 @@ def getQuirks():
 # 1. Check if all parameters are passed
 # 2. Check if used has permission to update that quirk
 # 3. Update the quirk
-@quirk_controller.route("/quirk_update", methods=['PUT'])
-def updateQuirkRoute():
-    id = request.args.get("id")
-    user_id = request.args.get("user_id")
-    quirk = request.args.get("quirk")
-
-    # Check if parameters are passed in
-    if (id is None or user_id is None or quirk is None):
+@quirk_controller.route("/quirk/<id>", methods=['PUT'])
+def updateQuirkRoute(id):
+    quirk = None
+    requestData = request.get_json()
+    if requestData is None or requestData["quirk"] is None:
         return make_response(jsonify({
             'error': 'Missing parameters'
         }), 400)
-
-    print "Checked parameters"
-
-    # Check user permission
+    quirk = requestData["quirk"]
     dbSession = dbGetSession()
-    if not userHasPermission(user_id, id, dbSession):
+    quirk_entry = dbSession.query(Quirk).filter(Quirk.id == id).one_or_none()
+    if not userHasPermission(quirk_entry.user_id):
         dbSession.close()
         return make_response(jsonify({
-            'error': 'Access denied'
-        }), 403)
-
-    print "Checked user permission"
-
-    quirk_entry = dbSession.query(Quirk).filter(Quirk.id == quirk_id).one_or_none()
+    'error': 'Access denied'
+    }), 403)
     quirk_entry.quirk = quirk
     dbSession.commit()
     dbSession.close()
-
-    return make_response(jsonify({
-            'id': id,
-            'user_id': user_id,
-            'quirk': quirk
-        }), 200)
+    return make_response(jsonify(quirk_entry.serialize()), 200)
 
 
 def fetchPriority(liker, likee, dbSession):
@@ -381,17 +367,9 @@ def addLikeRoute():
         'match': 'true'
     }), 200)
 
-def userHasPermission(user_id, quirk_id, dbSession):
+def userHasPermission(user_id):
     if not 'user_id' in session:
         return False
-
     if session['user_id'] != user_id:
         return False
-
-    quirk = dbSession.query(Quirk).filter(Quirk.id == quirk_id).one_or_none()
-
-    if quirk is None:
-        return False
-
-    if quirk.user_id == user_id:
-        return True
+    return True
