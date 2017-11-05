@@ -1,4 +1,3 @@
-from uuid import uuid4
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -32,5 +31,5 @@ def dbInitialize():
     Base.metadata.create_all(dbGet())
 
 def dbGetSession():
-    dbSession = sessionmaker(autocommit=False, autoflush=False, bind=dbGet())
+    dbSession = sessionmaker(expire_on_commit=False, autocommit=False, autoflush=False, bind=dbGet())
     return scoped_session(dbSession)

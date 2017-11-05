@@ -1,6 +1,6 @@
 import requests
 from ..utils import dbGetSession
-from ..models import User
+from ..models import User, Quirk
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
@@ -10,11 +10,14 @@ login_controller = Blueprint('login_controller', __name__, template_folder='temp
 # Creates a new user from facebook access token
 def createUser(accessToken, dbSession):
     userData = fbGetUser(accessToken)
-    userId = userData['id']
-    userName = userData['first_name']
-    userAge = userData['age_range']['min']
-    user = User(id=userId, name=userName, age=userAge)
+    id = userData['id']
+    name = userData['first_name']
+    age = userData['age_range']['min']
+    user = User(id=id, name=name, age=age)
     dbSession.add(user)
+    dbSession.commit()
+    for i in range(app.config['NUM_QUIRKS']):
+        dbSession.add(Quirk(user_id=id))
     dbSession.commit()
     return user
 
@@ -78,7 +81,7 @@ def fbInitialize():
 @login_controller.route("/login", methods=['POST'])
 def loginRoute():
     requestData = request.get_json()
-    if requestData['access_token'] is not None:
+    if requestData is not None and requestData['access_token'] is not None:
         fbUrl = 'https://graph.facebook.com/debug_token'
         fbParams = {
             'input_token': requestData['access_token'],
@@ -89,3 +92,12 @@ def loginRoute():
     return make_response(jsonify({
         'error': 'Access token not found'
     }), 400)
+
+@login_controller.route("/logout", methods=['POST'])
+def logoutRoute():
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+    id = session.pop('user_id')
+    return make_response("", 200)

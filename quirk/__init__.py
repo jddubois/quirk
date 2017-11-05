@@ -1,3 +1,3 @@
 from controllers import *
 from models import *
-from utils import *
+from utils import dbInitialize

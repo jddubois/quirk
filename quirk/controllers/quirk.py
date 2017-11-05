@@ -4,100 +4,193 @@ from ..models import Quirk, User, UserLike, Match, QuirkLike, Priority
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
-from sqlalchemy import and_, or_
-from math import sin, cos, sqrt, radians
+from sqlalchemy import and_, or_, func
+from math import radians
+from math import sin, acos, cos
+
 
 quirk_controller = Blueprint('quirk_controller', __name__)
 
-# Updates a users quirk
-# 1. Check if all parameters are passed
-# 2. Check if used has permission to update that quirk
-# 3. Update the quirk
+# Will remove from list if returns true
+def shouldRemoveUser(user, loggedInUser, dbSession):
+    # Remove if logged in user has liked user in question
+    if dbSession.query(UserLike).filter(
+        UserLike.liker_id == session['user_id'],
+        UserLike.likee_id == user.id
+    ).one_or_none() is not None:
+        return True
+
+    # Remove if not compatible wit gender / seeking
+    if not user.isGenderCompatible(loggedInUser):
+        print("Not gender compatible")
+        return True
+
+    # Remove if users are too far apart
+    if user.getDistance(loggedInUser) > loggedInUser.radius:
+        print("Distance too far")
+        return True
+
+    # Remove if logged in user has matched wih user in question
+    if user.id < session['user_id']:
+        if dbSession.query(Match).filter(
+            Match.user_one_id == user.id,
+            Match.user_two_id == session['user_id']
+        ).one_or_none() is not None:
+            return True
+    elif dbSession.query(Match).filter(
+        Match.user_one_id == session['user_id'],
+        Match.user_two_id == user.id
+    ).one_or_none() is not None:
+        return True
+
+    # Do not remove
+    return False
+
+def shouldRemoveQuirk(quirk, dbSession):
+    if dbSession.query(QuirkLike).filter(
+        QuirkLike.quirk_id == quirk.id,
+        QuirkLike.liker_id == session['user_id']
+    ).one_or_none() is not None:
+        return True
+    return False
+
+def getUserQuirks(user, dbSession):
+    quirks = dbSession.query(Quirk).filter(
+        Quirk.user_id == user.id
+    ).all()
+    return [ q for q in quirks if not shouldRemoveQuirk(q, dbSession) ]
+
+
 @quirk_controller.route("/quirk", methods=['GET'])
 def getQuirks():
 
+    # Check if logged in
     if not 'user_id' in session:
         return make_response(jsonify({
             'error' : 'user not logged in'
         }), 403)
 
-    # TODO Return error if no location found
+    # Get location from parameters
+    latitude = request.args.get("latitude")
+    longitude = request.args.get("longitude")
 
-    latitude = radians(request.args.get("latitude"))
-    longitude = radians(request.args.get("longitude"))
-    radius = 3959 # miles
+    # Check if location is valid
+    if latitude is None or longitude is None:
+        return make_response(jsonify({
+            'error': 'Missing parameters'
+        }), 400)
 
+    # Define constants for calculations
+    maxUsers = 20
+    radius = 3959
 
-    # SELECT * FROM Places WHERE ;
+    # Get user
     dbSession = dbGetSession()
-    user = dbSession.query(User).filter(User.user_id == session['user_id']).one_or_none()
+    user = dbSession.query(User).filter(User.id == session['user_id']).one_or_none()
 
+    print(session['user_id'])
     # check if user is none
     if user is None:
         return make_response(jsonify({
             'error' : 'user does not exist'
         }), 404)
 
-    userQuery = or_(Priority.user_one_id == session['user_id'], Priority.user_two_id == session['user_id'])
+    # Set user location
+    user.latitude = float(latitude)
+    user.longitude = float(longitude)
+    dbSession.commit()
 
     # Get Quirks by querying Quirk, QuirkLike, User, and Priority for best options
-    priorityQuirks = dbSession.query(Priority, User, QuirkLike, Quirk).\
-    filter(and_(userQuery, acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).\
-    order_by(Priority.priority).limit(100)
+    priorityUsers = dbSession.query(User, Priority).filter(
+    # Filter by user priority
+        or_(
+            Priority.user_one_id == session['user_id'],
+            Priority.user_two_id == session['user_id']
+        )
+    # Filter out users not in range
+    ).filter(
+        User.age >= user.min_age,
+        User.age <= user.max_age
+    # Filter by gender and seeking settings
+    ).order_by(Priority.priority).all()
 
-    print priorityQuirks
+    print "got priority quirks"
+    # Filter by not liked quirks
+    # TODO Clear priority after match
+    #priorityUsers = [ u for u in priorityUsers if not shouldRemoveUser(u, dbSession) ]
 
-    if len(priorityQuirks) < 100:
+    totalUsers = 0
+    filteredUsers = []
+    for u in priorityUsers:
+        if not shouldRemoveUser(u, user, dbSession):
+            totalUsers += 1
+            filteredUsers.append(u)
+            if totalUsers == maxUsers:
+                break
+
+
+
+    print "filtered priority quirks and displaying..."
+    print filteredUsers
+    if totalUsers < maxUsers:
         # Need to query more
-        regularQuirks = dbSession.query(User, QuirkLike, Quirk).filter(and_(acos(sin(latitude) * sin(User.latitude) + cos(latitude) * cos(User.latitude) * cos(User.longitude - (longitude))) * radius <= user.radius, QuirkLike.liker_id != session['user_id'])).limit(100 - priorityQuirks.count())
+        # TODO ensure NONE of these quirks are priority so that there is no overlap between previous set
+        # Get Quirks by querying Quirk, QuirkLike, User, and Priority for best options
+        otherUsers = dbSession.query(User).filter(
+            User.age >= user.min_age,
+            User.age <= user.max_age
+        ).all()
 
-        print regularQuirks
+        #otherUsers = [ u for u in otherUsers if not shouldRemoveUser(u, dbSession) and u is not in priorityUsers ]
+
+        for u in otherUsers:
+            if u not in filteredUsers and not shouldRemoveUser(u, user, dbSession):
+                totalUsers += 1
+                filteredUsers.append(u)
+                if totalUsers == maxUsers:
+                    break
+
+
+        # print regularQuirks
         # shuffle them up
-        return make_response(({
-        'priorities' : jsonify(priorityQuirks),
-        'regular' : jsonify(regularQuirks)
-        }), 200)
+        #otherUsers = [ (item[0].serialize(), item[1].serialize()) for item in filter ]
+        print "PRINTING TOTAL USERS + PRIORITY USERS"
+        print(filteredUsers)
 
+    # Filter out the quirks
+    quirks = []
+    for u in filteredUsers:
+        quirks.extend(getUserQuirks(u, dbSession))
+    dbSession.close()
     # If out here we can just return 100 priority quirks
     return make_response(jsonify({
-    'priorities' : jsonify(priorityQuirks),
-    'other': ''
+        'quirks' : [ q.serialize() for q in quirks ],
     }), 200)
 
-@quirk_controller.route("/quirk_update", methods=['PUT'])
-def updateQuirkRoute():
-    id = request.args.get("id")
-    user_id = request.args.get("user_id")
-    quirk = request.args.get("quirk")
-
-    # Check if parameters are passed in
-    if (id is None or user_id is None or quirk is None):
+# Updates a users quirk
+# 1. Check if all parameters are passed
+# 2. Check if used has permission to update that quirk
+# 3. Update the quirk
+@quirk_controller.route("/quirk/<id>", methods=['PUT'])
+def updateQuirkRoute(id):
+    quirk = None
+    requestData = request.get_json()
+    if requestData is None or requestData["quirk"] is None:
         return make_response(jsonify({
             'error': 'Missing parameters'
         }), 400)
-
-    print "Checked parameters"
-
-    # Check user permission
+    quirk = requestData["quirk"]
     dbSession = dbGetSession()
-    if not userHasPermission(user_id, id, dbSession):
+    quirk_entry = dbSession.query(Quirk).filter(Quirk.id == id).one_or_none()
+    if not userHasPermission(quirk_entry.user_id):
         dbSession.close()
         return make_response(jsonify({
-            'error': 'Access denied'
-        }), 403)
-
-    print "Checked user permission"
-
-    quirk_entry = dbSession.query(Quirk).filter(Quirk.id == quirk_id).one_or_none()
+    'error': 'Access denied'
+    }), 403)
     quirk_entry.quirk = quirk
     dbSession.commit()
     dbSession.close()
-
-    return make_response(jsonify({
-            'id': id,
-            'user_id': user_id,
-            'quirk': quirk
-        }), 200)
+    return make_response(jsonify(quirk_entry.serialize()), 200)
 
 
 def fetchPriority(liker, likee, dbSession):
@@ -202,8 +295,8 @@ def addLikeRoute():
                 priority = Priority(user_one_id = likee.id, user_two_id= liker.id, priority= 1)
 
             dbSession.add(priority)
-        
-        # Update (++) the existing priority 
+
+        # Update (++) the existing priority
         else:
 
             priority.priority = priority.priority + 1
@@ -251,7 +344,7 @@ def addLikeRoute():
 
     # See if likee likes liker
     newUserLike = dbSession.query(UserLike).filter(and_(UserLike.liker_id == likee.id and UserLike.likee_id == liker.id)).one_or_none()
-    
+
     # Likee does not like liker, liking is one way
     if newUserLike is None:
 
@@ -274,17 +367,9 @@ def addLikeRoute():
         'match': 'true'
     }), 200)
 
-def userHasPermission(user_id, quirk_id, dbSession):
+def userHasPermission(user_id):
     if not 'user_id' in session:
         return False
-
     if session['user_id'] != user_id:
         return False
-
-    quirk = dbSession.query(Quirk).filter(Quirk.id == quirk_id).one_or_none()
-
-    if quirk is None:
-        return False
-
-    if quirk.user_id == user_id:
-        return True
+    return True
