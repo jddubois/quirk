@@ -46,7 +46,7 @@ def getDeals():
         'deals' : deals
         }))
 
-# Todo, user authentication for requests
+# TODO:, user authentication for requests
 @deal_controller.route("/deal", methods=['POST'])
 def createDeal():
     latitude = request.args.get("latitude")
@@ -65,7 +65,7 @@ def createDeal():
     new_deal = Deal(latitude = latitude, longitude = longitude, business_name = business_name, deal_name = deal_name, deal_text = deal_text)
     dbSession.add(new_deal)
     dbSession.commit()
-    
+
     return make_response(jsonify({
         'id' : new_deal.id
     }), 200)
@@ -107,7 +107,7 @@ def updatePhoto(deal_id):
             'success' : 'File uploaded'
         }))
 
-    
+
 @deal_controller.route("/deal/<id>", methods=['PUT'])
 def updateDeal(deal_id):
     latitude = request.args.get("latitude")

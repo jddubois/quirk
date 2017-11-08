@@ -146,12 +146,26 @@ class Priority(Base):
     user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     priority = Column(SmallInteger(), default=0)
 
+class Business(Base):
+    __tablename__ = 'business'
+    id = Column(String(36), primary_key=True, default=uuidGet)
+    email = Column(String(255))
+    password = Column(Text)
+    business_name = Column(String(255))
+    def serialize(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'business_name': self.business_name
+    }
+
 class Deal(Base):
     __tablename__ = 'deals'
     id = Column(String(36), primary_key=True, default=uuidGet)
     latitude = Column(Float())
     longitude = Column(Float())
     business_name = Column(String(255))
+    business_id = Column(String(36), ForeignKey('business.id'))
     deal_name = Column(String(255))
     deal_text = Column(String(255))
     photo_id = Column(String(36), default="images/no_picture.jpg")
@@ -161,6 +175,7 @@ class Deal(Base):
             'latitude': self.latitude,
             'longitude': self.longitude,
             'business_name': self.business_name,
+            'business_id': self.business_id,
             'deal_name': self.deal_name,
             'deal_text': self.deal_text,
             'photo_id': self.photo_id
