@@ -130,6 +130,7 @@ class Match(Base):
     __tablename__ = 'matches'
     user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    has_chat = Column(Boolean(), default=False)
     def serialize(self, user, dbSession):
         otherId = self.user_two_id if self.user_one_id == user else self.user_one_id
         print(otherId)
@@ -138,6 +139,21 @@ class Match(Base):
         return {
             'name': otherUser.name,
             'photo': photo.getUrl()
+        }
+
+class Chat(Base):
+    __tablename__ = 'chats'
+    user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    last_message = Column(Text())
+    def serialize(self, user, dbSession):
+        otherId = self.user_two_id if self.user_one_id == user else self.user_one_id
+        otherUser = dbSession.query(User).filter(User.id == otherId).one_or_none()
+        photo = dbSession.query(Photo).filter(Photo.user_id == otherId, Photo.thumbnail == True).one_or_none()
+        return {
+            'name': otherUser.name,
+            'photo': photo.getUrl(),
+            'message': self.last_message
         }
 
 class Priority(Base):

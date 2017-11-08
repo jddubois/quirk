@@ -128,8 +128,6 @@ def getQuirks():
             if totalUsers == maxUsers:
                 break
 
-
-
     print "filtered priority quirks and displaying..."
     print filteredUsers
     if totalUsers < maxUsers:

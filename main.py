@@ -19,6 +19,7 @@ app.config['TWILIO_ACCOUNT_SID'] = "ACcbc2a061491f1c1a3d1d236ac3b2cb16"
 app.config['TWILIO_API_KEY'] = "SK5d6931aa13c2b510f12f6f0841280f6a"
 app.config['TWILIO_API_SECRET'] = "AWcvPuzdKK1VqA0ZKaLdj7gHyPs42jAE"
 app.config['TWILIO_CHAT_SERVICE_SID'] = "IS1d233ce4cf1445e198e43715718f9815"
+app.config['TWILIO_AUTH_TOKEN'] = "420ca808acc07ef8156994d48537110a"
 
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = 'static/images'

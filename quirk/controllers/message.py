@@ -14,8 +14,8 @@ def userHasPermission():
         return False
     return True
 
-@message_controller.route('/twilio',  methods=['GET'])
-def twilioRoute():
+@message_controller.route('/message/token',  methods=['GET'])
+def getTokenRoute():
 
     # Check user permissions
     if not userHasPermission():
@@ -48,3 +48,59 @@ def twilioRoute():
             'identity': identity,
             'token': token.to_jwt()
         }), 200)
+
+# TODO
+# Gets open chat channels for logged-in user
+@message_controller.route('/message/chats',  methods=['GET'])
+def getChatsRoute():
+    return
+
+# TODO
+# Creates a new chat channel betwen logged-in user and user_id
+# Need to make sure that a match exists between these userHasPermission
+# If either user does not have Twilio data, make them a USER
+@message_controller.route('/message/<userId>',  methods=['POST'])
+def sendMessageRoute(userId):
+    return
+
+@message_controller.route('/message/<userId>',  methods=['GET'])
+def getMessagesRoute(userId):
+    return
+
+
+# NOTE
+# A channel is a Twilio object that represents a chat between users
+# A chat is our object in the database that represents a chat
+
+# TODO NOTIFICATIONS
+# Set up notifications
+
+# TODO MATCHES
+# Alter match endpoints to only return users with no chats
+# Delete channels upon unmatching
+# Delete chats upon unmatching
+
+# TODO USER
+# Delete Twilio user data and all channels upon deleting user
+# Create a Twilio user upon creating user
+
+# TODO
+# Get messages
+    # Checks if channel exists between users
+    # if so, returns n messages from Twilio
+    # if not, returns empty messages
+
+# TODO
+# Send message
+    # Checks if channel exists between users
+        # if so, send message on the channel
+        # if not,
+            # Checks if both users are Twilio user
+                # if not for either, create user
+            # Creates channel between user
+            # Adds chats to database and sets match attribute for has_chat
+            # Sends message on channel
+
+# TODO
+# Get channels
+    # returns all currently open user chat channels

@@ -30,15 +30,13 @@ def getDeals():
             'error' : 'User does not exist'
             }), 404)
 
-    # TOOD: order by closeness
+    # TODO: order by closeness
     deals = dbSession.query(Deal, UserDeal).\
     filter(and_(UserDeal.deal_id != Deal.id, acos(sin(latitude) * sin(Deal.latitude)) * radius <= 15.0)).all()
-
     #  * sin(float(Deal.latitude)) + cos(latitude) * cos(float(Deal.latitude)) * cos(float(Deal.longitude - (longitude)))
 
-    print deals
-
     for deal in deals:
+        # Make request and see if this deal has been used
         deal.serialize()
 
     dbSession.close()
@@ -136,7 +134,6 @@ def updateDeal(deal_id):
             'success' : 'Deal updated'
         }))
 
-
 @deal_controller.route("/deals", methods=['PUT'])
 def useDeal():
     user = request.args.get('user_id')
@@ -177,7 +174,6 @@ def useDeal():
     return make_response(jsonify({
         'success' : 'deal used'
         }), 200)
-
 
 @deal_controller.route("/deal/<deal_id>", methods=['DELETE'])
 def deleteDeal(deal_id):
