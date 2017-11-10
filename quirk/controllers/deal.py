@@ -1,14 +1,15 @@
 import os
 import requests
 import hashlib
+import json
 from ..utils import dbGetSession
-from ..models import Deal, UserDeal, User
+from ..models import Deal, UserDeal
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
 from sqlalchemy import and_, or_
-from math import sin, cos, sqrt, radians, acos
 from werkzeug.utils import secure_filename
+from geopy.distance import vincenty
 
 deal_controller = Blueprint('deal_controller', __name__)
 
@@ -17,34 +18,60 @@ ALLOWED_EXTENSIONS = set(['jpg', 'png'])
 
 @deal_controller.route("/deals", methods=['GET'])
 def getDeals():
-    latitude = radians(float(request.args.get("latitude")))
-    longitude = radians(float(request.args.get("longitude")))
-    user = request.args.get("user_id")
-    radius = 3959.0 # miles
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+
+    # Get all the args from request
+    latitude = request.args.get('latitude')
+    longitude = request.args.get('longitude')
+    user_id = request.args.get('user_id')
+
+    if (latitude is None or longitude is None):
+        return make_response(jsonify({
+            'error' : 'Missing request parameters'
+            }), 422)
+
+
+    # This creates box around coordinates
+    latitude = float(latitude)
+    longitude = float(longitude)
+    dist_range = (300 / 69.172)
+    lat_lower_bound = latitude - dist_range
+    lat_upper_bound = latitude + dist_range
+    long_lower_bound = longitude - dist_range
+    long_upper_bound = longitude + dist_range
 
     dbSession = dbGetSession()
 
-    if user is None:
+    if user_id is None:
         dbSession.close()
         return make_response(jsonify({
             'error' : 'User does not exist'
             }), 404)
 
-    # TODO: order by closeness
-    deals = dbSession.query(Deal, UserDeal).\
-    filter(and_(UserDeal.deal_id != Deal.id, acos(sin(latitude) * sin(Deal.latitude)) * radius <= 15.0)).all()
-    #  * sin(float(Deal.latitude)) + cos(latitude) * cos(float(Deal.latitude)) * cos(float(Deal.longitude - (longitude)))
+    # Filters deals by location box we created
+    deals = dbSession.query(Deal).filter(and_(Deal.latitude >= lat_lower_bound, Deal.latitude <= lat_upper_bound, Deal.longitude >= long_lower_bound, Deal.longitude <= long_upper_bound)).all()
 
+    deals_serialized = []
     for deal in deals:
-        # Make request and see if this deal has been used
-        deal.serialize()
+        current_deal = deal.serialize()
+
+        # Check if user has been already used
+        used_deal = dbSession.query(UserDeal).filter(and_(UserDeal.user_id == user_id, UserDeal.deal_id == deal.id)).one_or_none()
+        if used_deal is None:
+            current_deal["deal_used"] = False
+        else:
+            current_deal["deal_used"] = True
+
+        deals_serialized.append(current_deal)
 
     dbSession.close()
     return make_response(jsonify({
-        'deals' : deals
+        'deals' : deals_serialized
         }))
 
-# TODO:, user authentication for requests
 @deal_controller.route("/deal", methods=['POST'])
 def createDeal():
     latitude = request.args.get("latitude")
@@ -105,7 +132,6 @@ def updatePhoto(deal_id):
             'success' : 'File uploaded'
         }))
 
-
 @deal_controller.route("/deal/<id>", methods=['PUT'])
 def updateDeal(deal_id):
     latitude = request.args.get("latitude")
@@ -136,20 +162,27 @@ def updateDeal(deal_id):
 
 @deal_controller.route("/deals", methods=['PUT'])
 def useDeal():
-    user = request.args.get('user_id')
-    dealId = request.args.get('deal_id')
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error': 'Access denied'
+        }), 403)
+
+    user_id = request.args.get('user_id')
+    deal_id = request.args.get('deal_id')
+    user_latitude = request.args.get('user_latitude')
+    user_longitude = request.args.get('user_longitude')
 
     dbSession = dbGetSession()
 
     # Make sure user exists
-    if user is None:
+    if user_id is None:
         dbSession.close()
         return make_response(jsonify({
             'error' : 'User does not exist'
             }), 404)
 
     # Make sure deal exists
-    deal = dbSession.query(Deal).filter(Deal.id == dealId).one_or_none()
+    deal = dbSession.query(Deal).filter(Deal.id == deal_id).one_or_none()
     if deal is None:
         dbSession.close()
         return make_response(jsonify({
@@ -157,22 +190,35 @@ def useDeal():
             }))
 
     # Make sure they aren't trying to use the deal again
-    deal = dbSession.query(UserDeal, Deal).filter(and_(Deal.id == dealId, UserDeal.deal_id == dealId, UserDeal.user_id == user)).one_or_none()
-    # Deal.id == dealId, UserDeal.deal_id == dealId, UserDeal.user_id == user.id
-    if deal is not None:
+    deal_redeemed = dbSession.query(UserDeal, Deal).filter(and_(Deal.id == deal_id, UserDeal.deal_id == deal_id, UserDeal.user_id == user_id)).one_or_none()
+
+    if deal_redeemed is not None:
         dbSession.close()
         return make_response(jsonify({
             'error' : 'Deal has already been used'
             }), 403)
 
+    deal_latitude = deal.latitude
+    deal_longitude = deal.longitude
+    user_coords = (user_latitude, user_longitude)
+    deal_coords = (deal_latitude, deal_longitude)
+
+    # Make sure user is within 500 feet of the deal
+    distance = vincenty(user_coords, deal_coords).miles
+    if distance >= 0.5:
+        dbSession.close()
+        return make_response(jsonify({
+            'error' : 'User is too far from deal'
+            }), 403)
+
     # Use deal
-    newUse = UserDeal(user_id = user, deal_id = dealId)
+    newUse = UserDeal(user_id = user_id, deal_id = deal_id)
     dbSession.add(newUse)
     dbSession.commit()
     dbSession.close()
 
     return make_response(jsonify({
-        'success' : 'deal used'
+        'success' : 'Deal Used'
         }), 200)
 
 @deal_controller.route("/deal/<deal_id>", methods=['DELETE'])

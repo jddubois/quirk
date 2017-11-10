@@ -159,11 +159,17 @@ def getQuirks():
     quirks = []
     for u in filteredUsers:
         quirks.extend(getUserQuirks(u, dbSession))
-    dbSession.close()
+
+    dbSession.commit()
+
     # If out here we can just return 100 priority quirks
-    return make_response(jsonify({
-        'quirks' : [ q.serialize() for q in quirks ],
+    response = make_response(jsonify({
+        'quirks' : [ q.serialize() for q in quirks ]
     }), 200)
+
+    dbSession.close()
+    
+    return response;
 
 # Updates a users quirk
 # 1. Check if all parameters are passed
@@ -171,24 +177,39 @@ def getQuirks():
 # 3. Update the quirk
 @quirk_controller.route("/quirk/<id>", methods=['PUT'])
 def updateQuirkRoute(id):
+    mm_quirk = request.args.get("match_maker")
     quirk = None
     requestData = request.get_json()
+
     if requestData is None or requestData["quirk"] is None:
         return make_response(jsonify({
             'error': 'Missing parameters'
         }), 400)
+
     quirk = requestData["quirk"]
     dbSession = dbGetSession()
+
     quirk_entry = dbSession.query(Quirk).filter(Quirk.id == id).one_or_none()
     if not userHasPermission(quirk_entry.user_id):
         dbSession.close()
         return make_response(jsonify({
     'error': 'Access denied'
     }), 403)
+
     quirk_entry.quirk = quirk
+
+    if mm_quirk is None:
+        quirk_entry.match_maker = False
+
+    quirk_entry.mm_quirk = mm_quirk
+
     dbSession.commit()
+    
+    response = make_response(jsonify(quirk_entry.serialize()), 200)
+
     dbSession.close()
-    return make_response(jsonify(quirk_entry.serialize()), 200)
+
+    return response
 
 
 def fetchPriority(liker, likee, dbSession):
@@ -221,6 +242,7 @@ def createMatch(liker, likee, dbSession):
 
     dbSession.add(newMatch)
     dbSession.commit()
+    return newMatch
 
 ### Endpoint for telling whether there is a like or not
 ### Returns whether or not you matched with person
@@ -238,6 +260,12 @@ def addLikeRoute():
     # TODO: check if liker is logged in via facebook
     liker = userExists(likerId, dbSession)
     likee = userExists(likeeId, dbSession)
+
+    # Check if logged in
+    if not 'user_id' in session:
+        return make_response(jsonify({
+            'error' : 'user not logged in'
+        }), 403)
 
     # Check if quirk exists
     quirk = dbSession.query(Quirk).filter(Quirk.id == quirkId).one_or_none()
@@ -330,22 +358,24 @@ def addLikeRoute():
             }), 200)
 
     # See if liker likes likee
-    alllikerQuirks = dbSession.query(QuirkLike).filter(and_(QuirkLike.liker_id == liker.id, QuirkLike.likee_id == likee.id)).all()
+    if not quirk.match_maker:
+        print "not match maker quirk"
+        alllikerQuirks = dbSession.query(QuirkLike).filter(and_(QuirkLike.liker_id == liker.id, QuirkLike.likee_id == likee.id)).all()
 
-    # Liker does not like likee yet
-    if len(alllikerQuirks) < 3:
-
-        dbSession.close()
-        return make_response(jsonify({
-            'match': 'false'
-            }), 200)
+        # Liker does not like likee yet
+        if len(alllikerQuirks) < 3:
+            print "liker does not like likee yet"
+            dbSession.close()
+            return make_response(jsonify({
+                'match': 'false'
+                }), 200)
 
     # See if likee likes liker
     newUserLike = dbSession.query(UserLike).filter(and_(UserLike.liker_id == likee.id and UserLike.likee_id == liker.id)).one_or_none()
 
     # Likee does not like liker, liking is one way
     if newUserLike is None:
-
+        print "likee does not like liker, liking is one way"
         # Add that liker like likee only
         dbSession.add(UserLike(liker_id= liker.id, likee_id= likee.id, liked= True))
         dbSession.commit()
@@ -358,12 +388,27 @@ def addLikeRoute():
     # Both like each other, delete this entry UserLike
     dbSession.query(UserLike).filter(and_(UserLike.likee_id == likee.id and UserLike.liker_id == liker.id)).delete()
 
-    # Create a match bc liker and likee like each other
-    createMatch(liker, likee, dbSession)
+    # Delete priority
+    if liker.id < likee.id:
+        dbSession.query(Priority).filter(Priority.user_one_id == liker.id, Priority.user_two_id == likee.id).delete()
+    else:
+        dbSession.query(Priority).filter(Priority.user_one_id == likee.id, Priority.user_two_id == liker.id).delete()
 
-    return make_response(jsonify({
-        'match': 'true'
+    # Create a match bc liker and likee like each other
+    match = createMatch(liker, likee, dbSession)
+
+    dbSession.commit()
+
+    print "match is made"
+
+    response = make_response(jsonify({
+        'match': 'true',
+        'user': match.serialize(liker.id, dbSession)
     }), 200)
+
+    dbSession.close()
+
+    return response
 
 def userHasPermission(user_id):
     if not 'user_id' in session:

@@ -39,6 +39,7 @@ app.register_blueprint(controllers.test_controller)
 def initialize():
     utils.dbInitialize()
     controllers.fbInitialize()
+    controllers.setupNotifications()
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0')

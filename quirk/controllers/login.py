@@ -4,6 +4,7 @@ from ..models import User, Quirk
 from flask import Flask, Blueprint
 from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
+from twilio.rest import Client
 
 login_controller = Blueprint('login_controller', __name__, template_folder='templates')
 
@@ -17,8 +18,15 @@ def createUser(accessToken, dbSession):
     dbSession.add(user)
     dbSession.commit()
     for i in range(app.config['NUM_QUIRKS']):
-        dbSession.add(Quirk(user_id=id))
+        dbSession.add(Quirk(user_id=id, match_maker=False))
     dbSession.commit()
+
+    # Set up Twilio for user
+    client = Client(app.config['TWILIO_ACCOUNT_SID'], app.config['TWILIO_AUTH_TOKEN'])
+    client.chat.services(app.config['TWILIO_CHAT_SERVICE_SID']).users.create(
+        identity=id
+    )
+
     return user
 
 # Returns user if response is a valid login, None otherwise

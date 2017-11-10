@@ -83,6 +83,7 @@ class Quirk(Base):
     id = Column(String(36), primary_key=True, default=uuidGet)
     quirk = Column(String(140))
     user_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
+    match_maker = Column(Boolean(), default=False)
     def serialize(self):
         return {
             'id': self.id,
@@ -143,8 +144,9 @@ class Match(Base):
 
 class Chat(Base):
     __tablename__ = 'chats'
-    user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
-    user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    id = Column(String(255), primary_key=True)
+    user_one_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
+    user_two_id = Column(String(255), ForeignKey('users.id', ondelete="CASCADE"))
     last_message = Column(Text())
     def serialize(self, user, dbSession):
         otherId = self.user_two_id if self.user_one_id == user else self.user_one_id

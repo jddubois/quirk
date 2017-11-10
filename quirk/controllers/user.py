@@ -7,6 +7,8 @@ from flask import current_app as app
 from flask import render_template, jsonify, request, session, make_response
 from sqlalchemy import and_, or_
 from werkzeug.utils import secure_filename
+from twilio.rest import Client
+
 user_controller = Blueprint('user_controller', __name__)
 
 @user_controller.route("/photo", methods=['POST'])
@@ -52,7 +54,7 @@ def uploadPhotoRoute():
         # Return URL
         return make_response(jsonify({
             'url': photo.getUrl()
-        }), 400)
+        }), 200)
     # Return error
     return make_response(jsonify({
         'error': 'File not found'
@@ -174,13 +176,47 @@ def deleteUserRoute(userId):
         }), 403)
     user = dbSession.query(User).filter(User.id == userId).one_or_none()
     if user is None:
+        dbSession.close()
         return make_response(jsonify({
             'error': 'User not found'
         }), 404)
+
+    account = app.config['TWILIO_ACCOUNT_SID']
+    token = app.config['TWILIO_AUTH_TOKEN']
+    client = Client(account, token)
+
+    #Delete all channels by accessing chats
+    chats = dbSession.query(Chat).filter(or_(Chat.user_one_id == userId, Chat.user_two_id == userId)).all()
+    for chat in chats:
+        response = client.chat \
+                     .services(app.config['TWILIO_CHAT_SERVICE_SID']) \
+                     .channels(chat.id) \
+                     .delete()
+    #Delete all photos from disk (see deletePhotoRoute)
+    photos = dbSession.query(Photo).filter(Photo.id == userId).all()
+    for photo in photos:
+        url = photo.getUrl()
+        if url is None:
+            return make_response(jsonify({
+                'error': 'File not found'
+            }), 400)
+        # Get filename
+        filename = os.path.basename(url)
+        filename = secure_filename(filename)
+        # Remove from disk
+        deleteUrl = app.config['UPLOAD_FOLDER'] + '/' + filename
+        os.remove(deleteUrl)
+    #Delete Twilio User
+    client = Client(app.config['TWILIO_ACCOUNT_SID'], app.config['TWILIO_AUTH_TOKEN'])
+    response = client.chat.services('TWILIO_CHAT_SERVICE_SID').users.create(
+        identity=userId
+    ).delete()
+    #Delete user
     dbSession.delete(user)
     dbSession.commit()
     dbSession.close()
     session.pop('user_id')
+
     return make_response("", 200)
 
 # Fix this to ensure correct permissions
