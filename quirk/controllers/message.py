@@ -10,7 +10,6 @@ from twilio.jwt.access_token.grants import ChatGrant
 from sqlalchemy import and_, or_
 from ..models import Chat, Match, User
 
-
 message_controller = Blueprint('message_controller', __name__)
 
 def serializeMessage(msg):
@@ -49,42 +48,6 @@ def userHasPermission():
         return False
     return True
 
-@message_controller.route('/message/token',  methods=['GET'])
-def getTokenRoute():
-
-    # Check user permissions
-    if not userHasPermission():
-        return make_response(jsonify({
-            'error': 'Access denied'
-        }), 403)
-
-    # get credentials for environment variables
-    account_sid = app.config['TWILIO_ACCOUNT_SID']
-    api_key = app.config['TWILIO_API_KEY']
-    api_secret = app.config['TWILIO_API_SECRET']
-    service_sid = app.config['TWILIO_CHAT_SERVICE_SID']
-
-    # get user identity
-    identity = session['user_id']
-
-    # Create a unique endpoint ID for the logged in user
-    #device_id = request.args.get('device')
-    #endpoint = "Quirk:{0}:{1}".format(identity, device_id)
-
-    # Create access token with credentials
-    token = AccessToken(account_sid, api_key, api_secret, identity=identity)
-
-    # Create a Chat grant and add to token
-    chat_grant = ChatGrant(service_sid=service_sid)
-    token.add_grant(chat_grant)
-
-    # Return token info as JSON
-    return make_response(jsonify({
-            'identity': identity,
-            'token': token.to_jwt()
-        }), 200)
-
-# TODO
 # Gets open chat channels for logged-in user
 @message_controller.route('/message/chats',  methods=['GET'])
 def getChatsRoute():
@@ -109,10 +72,7 @@ def getChatsRoute():
 
     return response
 
-# TODO
-# Creates a new chat channel betwen logged-in user and user_id
-# Need to make sure that a match exists between these userHasPermission
-# If either user does not have Twilio data, make them a USER
+# Sends a message between two users
 @message_controller.route('/message/<userId>',  methods=['POST'])
 def sendMessageRoute(userId):
 
