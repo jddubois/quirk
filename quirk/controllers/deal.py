@@ -26,7 +26,7 @@ def getDeals():
     # Get all the args from request
     latitude = request.args.get('latitude')
     longitude = request.args.get('longitude')
-    user_id = request.args.get('user_id')
+    user_id = session['user_id']
 
     if (latitude is None or longitude is None):
         return make_response(jsonify({
@@ -51,8 +51,17 @@ def getDeals():
             'error' : 'User does not exist'
             }), 404)
 
+    print longitude
+    print latitude
+    print lat_lower_bound
+    print lat_upper_bound
+    print long_upper_bound
+    print long_lower_bound
     # Filters deals by location box we created
     deals = dbSession.query(Deal).filter(and_(Deal.latitude >= lat_lower_bound, Deal.latitude <= lat_upper_bound, Deal.longitude >= long_lower_bound, Deal.longitude <= long_upper_bound)).all()
+   
+    print "Deals"
+    print deals
 
     deals_serialized = []
     for deal in deals:
@@ -68,9 +77,10 @@ def getDeals():
         deals_serialized.append(current_deal)
 
     dbSession.close()
+    print "made it down here"
     return make_response(jsonify({
         'deals' : deals_serialized
-        }))
+        }), 200)
 
 @deal_controller.route("/deal", methods=['POST'])
 def createDeal():

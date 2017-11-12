@@ -16,11 +16,13 @@ class User(Base):
     name = Column(String(255))
     age = Column(SmallInteger())
     bio = Column(Text())
-    radius = Column(SmallInteger())
-    latitude = Column(Float())
-    longitude = Column(Float())
-    min_age = Column(SmallInteger())
-    max_age = Column(SmallInteger())
+    city = Column(String(255))
+    occupation = Column(String(255))
+    radius = Column(SmallInteger(), default=50)
+    latitude = Column(Float(), default=42.0)
+    longitude = Column(Float(), default=-83.0)
+    min_age = Column(SmallInteger(), default=18)
+    max_age = Column(SmallInteger(), default=30)
     gender = Column(SmallInteger())
     seeking = Column(SmallInteger())
     reports = Column(SmallInteger(), default=0)
@@ -45,8 +47,12 @@ class User(Base):
 
     def getDistance(self, other):
         radius = 3959
+        print other.latitude
+        print other.longitude
+        print self.latitude
+        print self.longitude
         return acos(
-            sin(radians(other.latitude)) * sin(radians(self.latitude)) + cos(radians(other.latitude)) * cos(radians(self.latitude)) * cos(radians(self.longitude - other.longitude))
+            sin(radians(float(other.latitude))) * sin(radians(float(self.latitude))) + cos(radians(float(other.latitude))) * cos(radians(float(self.latitude))) * cos(radians(float(self.longitude) - float(other.longitude)))
         ) * radius
 
     def set(self, newUser):
@@ -73,6 +79,15 @@ class User(Base):
             'name': self.name,
             'age': self.age,
             'bio': self.bio,
+            'gender': self.gender,
+            'city': self.city,
+            'occupation': self.occupation,
+            'seeking': self.seeking,
+            'min_age': self.min_age,
+            'max_age': self.max_age,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'radius': self.radius,
             'thumbnail': thumbnailUrl,
             'photos': [photo.getUrl() for photo in userPhotos],
             'quirks': [quirk.serialize() for quirk in userQuirks]
@@ -137,9 +152,17 @@ class Match(Base):
         print(otherId)
         otherUser = dbSession.query(User).filter(User.id == otherId).one_or_none()
         photo = dbSession.query(Photo).filter(Photo.user_id == otherId, Photo.thumbnail == True).one_or_none()
+        if photo is not None:
+            return {
+                'name': otherUser.name,
+                'id': otherId,
+                'photo': photo.getUrl()
+            }
+
         return {
             'name': otherUser.name,
-            'photo': photo.getUrl()
+            'id': otherId,
+            'photo': "http://67.205.134.136:5000/static/images/f978ad1a-c4c0-4341-b77b-9a6757099dad.jpg"
         }
 
 class Chat(Base):
@@ -152,9 +175,17 @@ class Chat(Base):
         otherId = self.user_two_id if self.user_one_id == user else self.user_one_id
         otherUser = dbSession.query(User).filter(User.id == otherId).one_or_none()
         photo = dbSession.query(Photo).filter(Photo.user_id == otherId, Photo.thumbnail == True).one_or_none()
+        if photo is not None:
+            return {
+                'name': otherUser.name,
+                'photo': photo.getUrl(),
+                'id': otherId,
+                'message': self.last_message
+            }
         return {
             'name': otherUser.name,
-            'photo': photo.getUrl(),
+            'id': otherId,
+            'photo': "http://67.205.134.136:5000/static/images/f978ad1a-c4c0-4341-b77b-9a6757099dad.jpg",
             'message': self.last_message
         }
 

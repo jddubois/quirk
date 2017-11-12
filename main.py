@@ -33,6 +33,7 @@ app.register_blueprint(controllers.quirk_controller)
 app.register_blueprint(controllers.deal_controller)
 app.register_blueprint(controllers.matches_controller)
 app.register_blueprint(controllers.business_controller)
+app.register_blueprint(controllers.message_controller)
 app.register_blueprint(controllers.test_controller)
 
 @app.before_first_request

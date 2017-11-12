@@ -14,7 +14,7 @@ def createUser(accessToken, dbSession):
     id = userData['id']
     name = userData['first_name']
     age = userData['age_range']['min']
-    user = User(id=id, name=name, age=age)
+    user = User(id=id, name=name, age=age, min_age=18, max_age=99)
     dbSession.add(user)
     dbSession.commit()
     for i in range(app.config['NUM_QUIRKS']):

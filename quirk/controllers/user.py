@@ -39,6 +39,15 @@ def uploadPhotoRoute():
     isThumbnail = request.args.get('thumbnail')
     if isThumbnail is None:
         isThumbnail = False
+    # Set old thumbnail to normal photo
+    dbSession = dbGetSession()
+    currentThumbnail = dbSession.query(Photo).filter(Photo.thumbnail == True).one_or_none()
+    if currentThumbnail:
+        deleteUrl = '{}/{}.{}'.format(app.config['UPLOAD_FOLDER'], currentThumbnail.id, currentThumbnail.ext)
+        dbSession.delete(currentThumbnail)
+        dbSession.commit()
+        os.remove(deleteUrl)
+
     # Create photo entry
     photo = Photo(id=uuidGet(), ext=extension, user_id=session['user_id'], thumbnail=isThumbnail)
     # Generate filename
@@ -47,7 +56,6 @@ def uploadPhotoRoute():
     if file:
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         # Add photo to database
-        dbSession = dbGetSession()
         dbSession.add(photo)
         dbSession.commit()
         dbSession.close()
@@ -56,6 +64,7 @@ def uploadPhotoRoute():
             'url': photo.getUrl()
         }), 200)
     # Return error
+    dbSession.close()
     return make_response(jsonify({
         'error': 'File not found'
     }), 400)

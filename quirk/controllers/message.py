@@ -1,4 +1,5 @@
 import requests
+import json
 from ..utils import dbGetSession
 from flask import Flask, Blueprint
 from flask import current_app as app
@@ -7,10 +8,20 @@ from twilio.rest import Client
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import ChatGrant
 from sqlalchemy import and_, or_
-from ..models import Chat
+from ..models import Chat, Match, User
 
 
-message_controller = Blueprint('matches_controller', __name__)
+message_controller = Blueprint('message_controller', __name__)
+
+def serializeMessage(msg):
+    print(msg.body)
+    print(msg.attributes)
+    attrs = json.loads(msg.attributes)
+    print(attrs)
+    return {
+        'from': attrs['from'],
+        'body': msg.body
+    }
 
 def setupNotifications():
     # Find your Account Sid at https://www.twilio.com/console/account/settings
@@ -57,14 +68,14 @@ def getTokenRoute():
     identity = session['user_id']
 
     # Create a unique endpoint ID for the logged in user
-    device_id = request.args.get('device')
-    endpoint = "Quirk:{0}:{1}".format(identity, device_id)
+    #device_id = request.args.get('device')
+    #endpoint = "Quirk:{0}:{1}".format(identity, device_id)
 
     # Create access token with credentials
     token = AccessToken(account_sid, api_key, api_secret, identity=identity)
 
     # Create a Chat grant and add to token
-    chat_grant = ChatGrant(endpoint_id=endpoint, service_sid=service_sid)
+    chat_grant = ChatGrant(service_sid=service_sid)
     token.add_grant(chat_grant)
 
     # Return token info as JSON
@@ -111,7 +122,7 @@ def sendMessageRoute(userId):
             'error': 'Access denied'
         }), 403)
 
-    dbSession = getDbSession()
+    dbSession = dbGetSession()
 
     dbQueryOne = and_(Match.user_one_id == userId, Match.user_two_id == session['user_id'])
     dbQueryTwo = and_(Match.user_one_id == session['user_id'], Match.user_two_id == userId)
@@ -133,10 +144,10 @@ def sendMessageRoute(userId):
         channel = client.chat \
                 .services(app.config['TWILIO_CHAT_SERVICE_SID']) \
                 .channels \
-                .create(type=private)
+                .create()
 
         newChat = Chat(id= channel.sid, user_one_id= match.user_one_id, user_two_id= match.user_two_id, last_message= requestData['message'])
-
+        match.has_chat = True
         dbSession.add(newChat)
         dbSession.commit()
 
@@ -146,12 +157,14 @@ def sendMessageRoute(userId):
         # send message
         user = dbSession.query(User).filter(User.id == session['user_id']).one_or_none()
 
-        channel.messages.create(body=requestData['message']) #, from=user.name
+        fromData = json.dumps({'from': session['user_id']})
+        print(fromData)
+        channel.messages.create(body=requestData['message'], attributes=fromData) #, from=user.name
 
     else:
 
         # Chat already exists, just send message
-        currChat = dbSession.query(Chat).filter(user_one_id = match.user_one_id, user_two_id= match.user_two_id).one_or_none()
+        currChat = dbSession.query(Chat).filter(Chat.user_one_id == match.user_one_id, Chat.user_two_id == match.user_two_id).one_or_none()
 
         if currChat is None:
             dbSession.close()
@@ -164,7 +177,11 @@ def sendMessageRoute(userId):
             .channels(currChat.id) \
             .fetch()
 
-        channel.messages.create(body=requestData['message']) #, from=user.name
+        fromData = json.dumps({'from': session['user_id']})
+        print(fromData)
+        currChat.last_message = requestData['message']
+        channel.messages.create(body=requestData['message'], attributes=fromData) #, from=user.name
+        dbSession.commit()
 
     dbSession.close()
     return make_response(jsonify({
@@ -181,7 +198,7 @@ def getMessagesRoute(userId):
             'error': 'Access denied'
         }), 403)
 
-    dbSession = getDbSession()
+    dbSession = dbGetSession()
 
     dbQueryOne = and_(Match.user_one_id == userId, Match.user_two_id == session['user_id'])
     dbQueryTwo = and_(Match.user_one_id == session['user_id'], Match.user_two_id == userId)
@@ -199,7 +216,7 @@ def getMessagesRoute(userId):
             'messages': []
         }), 200)
 
-    currChat = dbSession.query(Chat).filter(user_one_id = match.user_one_id, user_two_id= match.user_two_id).one_or_none()
+    currChat = dbSession.query(Chat).filter(Chat.user_one_id == match.user_one_id, Chat.user_two_id == match.user_two_id).one_or_none()
 
     if currChat is None:
         dbSession.close()
@@ -218,7 +235,7 @@ def getMessagesRoute(userId):
 
     dbSession.close()
     return make_response(jsonify({
-            'messages': messages
+            'messages': [serializeMessage(msg) for msg in messages]
         }), 200)
 
 
@@ -236,4 +253,3 @@ def getMessagesRoute(userId):
 
 # TODO USER
 # Delete Twilio user data and all channels upon deleting user
-

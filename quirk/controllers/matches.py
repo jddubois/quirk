@@ -25,28 +25,10 @@ def getMatchesRoute():
         "matches": matchesDict
     }), 200)
 
-    # matchIdAndPhoto = []
-    # for each in matches:
-    #     if each.userOneId == session["user_id"]: #match is userTwo
-    #         photo = dbSession.query(Photo).filter(Photo.userId == each.userTwoId).all()
-    #         if photo is None:
-    #             matchIdAndPhoto.append({'matchedUserId': each.userTwoId, 'photo': None})
-    #         else:
-    #             matchIdAndPhoto.append({'matchedUserId': each.userTwoId, 'photo': photo[0]})
-    #     else: #match is userOne
-    #         photo = dbSession.query(Photo).filter(Photo.userId == each.userOneId).all()
-    #         if photo is None:
-    #             matchIdAndPhoto.append({'matchedUserId': each.userOneId, 'photo': None})
-    #         else:
-    #             matchIdAndPhoto.append({'matchedUserId': each.userOneId, 'photo': photo[0]})
-    # dbSession.close()
-
-
-
 @matches_controller.route("/match/<userId>", methods=['DELETE'])
 def unmatchRoute(userId):
     dbSession = dbGetSession()
-    if not userHasPermission(userId):
+    if not userHasPermission():
         dbSession.close()
         return make_response(jsonify({
             'error': 'Access denied'
@@ -60,11 +42,33 @@ def unmatchRoute(userId):
             'error': 'Match not found'
         }), 404)
     dbSession.delete(match)
+    #deleteChannel(userId)
+    #deleteChat(userId)
+    #Check has chat
+    dbQueryThree = and_(Chat.user_one_id == userId, Chat.user_two_id == session['user_id'])
+    dbQueryFour = and_(Chat.user_one_id == session['user_id'], Chat.user_two_id == userId)
+    chat = dbSession.query(Chat).filter(or_(dbQueryThree, dbQueryFour)).one_or_none()
+    if chat is None:
+        dbSession.close()
+        return
+
+    account = app.config['TWILIO_ACCOUNT_SID']
+    token = app.config['TWILIO_AUTH_TOKEN']
+    client = Client(account, token)
+
+    # Delete the channel
+    response = client.chat \
+                 .services(app.config['TWILIO_CHAT_SERVICE_SID']) \
+                 .channels(chat.id) \
+                 .delete()
+
+    #Delete 1 Chat from Database
+    dbSession.delete(chat)
+
     dbSession.commit()
     dbSession.close()
     return make_response("", 200)
 
-# TODO MATCHES
 # Delete channel upon unmatching
 @matches_controller.route('/<userId>',  methods=['DELETE'])
 def deleteChannel(userId):
@@ -141,7 +145,7 @@ def deleteChat(userId):
     dbSession.close()
 
 # Fix this to ensure correct permissions
-def userHasPermission(userId):
+def userHasPermission():
     if not 'user_id' in session:
         return False
     return True

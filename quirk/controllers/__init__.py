@@ -7,3 +7,4 @@ from business import business_controller
 from test import test_controller
 from matches import matches_controller
 from message import setupNotifications
+from message import message_controller
